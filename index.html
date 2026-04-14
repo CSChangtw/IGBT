@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IGBT 模組過溫檢測分析系統 v2</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#00e5ff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="IGBT-TSD">
+<link rel="apple-touch-icon" href="icon-192x192.png">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+
+:root {
+  --bg:#080b10; --s0:#0b0f18; --s1:#0f1520; --s2:#131c2e; --s3:#192540;
+  --border:#1c2d48; --border2:#243655;
+  --cyan:#00e5ff; --cyan-dim:rgba(0,229,255,0.12);
+  --orange:#ff6b35; --orange-dim:rgba(255,107,53,0.12);
+  --yellow:#ffd600; --yellow-dim:rgba(255,214,0,0.10);
+  --red:#ff1744; --red-dim:rgba(255,23,68,0.12);
+  --green:#00e676; --green-dim:rgba(0,230,118,0.10);
+  --text:#c2d4ee; --text-mid:#7a9abf; --text-dim:#3d5a7a;
+  --mono:'Share Tech Mono',monospace; --body:'Noto Sans TC',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--body);min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.018) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0;}
+.wrap{position:relative;z-index:1;max-width:1280px;margin:0 auto;padding:18px 20px;}
+
+/* HEADER */
+header{display:flex;align-items:center;gap:12px;padding:10px 0 8px;border-bottom:1px solid var(--border);margin-bottom:0;}
+.hd-icon{width:36px;height:36px;flex-shrink:0;}
+.hd-title{font-family:var(--mono);font-size:1.15rem;font-weight:700;color:var(--cyan);letter-spacing:.1em;text-transform:uppercase;line-height:1.2;}
+.hd-sub{font-size:.75rem;font-weight:500;color:var(--text-mid);margin-top:3px;letter-spacing:.04em;}
+.hd-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+.sys-tag{font-family:var(--mono);font-size:.6rem;color:var(--text-dim);letter-spacing:.07em;}
+.live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2s infinite;margin-right:3px;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+/* TABS — sticky so they don't scroll away */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:50;margin:0 -20px;padding:0 20px;}
+.tab-btn{font-family:var(--mono);font-size:.82rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:10px 22px;cursor:pointer;border:none;background:transparent;color:var(--text-mid);border-bottom:2px solid transparent;transition:all .18s;white-space:nowrap;}
+.tab-btn:hover{color:var(--text);}
+.tab-btn.active{color:var(--cyan);border-bottom-color:var(--cyan);font-weight:700;}
+.tab-panel{display:none;padding-top:12px;}.tab-panel.active{display:block;}
+
+/* PANEL */
+.panel{background:var(--s2);border:1px solid var(--border);border-radius:4px;overflow:hidden;}
+.ph{background:linear-gradient(135deg,var(--s1) 0%,var(--s2) 100%);border-bottom:1px solid var(--border);padding:9px 15px;display:flex;align-items:center;gap:8px;}
+.ph .lbl{font-family:var(--mono);font-size:.7rem;color:var(--cyan);letter-spacing:.1em;text-transform:uppercase;}
+.ph .badge{margin-left:auto;font-family:var(--mono);font-size:.6rem;padding:2px 7px;border-radius:2px;border:1px solid var(--border);color:var(--text-dim);}
+.pb{padding:15px;}
+
+/* GRID */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:15px;}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:15px;}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+@media(max-width:900px){.g2,.g3,.g4{grid-template-columns:1fr;}}
+
+/* INPUTS */
+.ig{margin-bottom:13px;}
+.ig label{display:block;font-size:.7rem;color:var(--text-dim);letter-spacing:.05em;text-transform:uppercase;margin-bottom:5px;}
+.ir{display:flex;align-items:center;gap:8px;}
+input[type=range]{flex:1;-webkit-appearance:none;height:3px;background:var(--border);border-radius:2px;outline:none;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--cyan);box-shadow:0 0 7px var(--cyan);cursor:pointer;}
+.vd{font-family:var(--mono);font-size:.8rem;color:var(--cyan);min-width:68px;text-align:right;}
+.rg{display:flex;flex-wrap:wrap;gap:6px;}
+.rb{display:flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:.72rem;transition:all .15s;user-select:none;}
+.rb:hover{border-color:var(--cyan);color:var(--cyan);}
+.rb.active{border-color:var(--cyan);background:var(--cyan-dim);color:var(--cyan);}
+
+/* BUTTON */
+.btn-run{width:100%;padding:13px;background:transparent;border:1px solid var(--cyan);color:var(--cyan);font-family:var(--mono);font-size:.82rem;letter-spacing:.15em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .2s;position:relative;overflow:hidden;margin-top:6px;}
+.btn-run::before{content:'';position:absolute;inset:0;background:var(--cyan);transform:translateX(-100%);transition:transform .25s;z-index:-1;}
+.btn-run:hover{color:var(--bg);}.btn-run:hover::before{transform:translateX(0);}
+
+/* CHECKLIST TABLE */
+.ck-table{width:100%;border-collapse:collapse;}
+.ck-table th{font-family:var(--mono);font-size:.63rem;color:var(--text-dim);letter-spacing:.08em;text-transform:uppercase;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border2);background:var(--s1);}
+.ck-table td{font-size:.75rem;padding:9px 10px;border-bottom:1px solid rgba(28,45,72,.5);vertical-align:top;line-height:1.55;}
+.ck-table tr:last-child td{border-bottom:none;}
+.ck-table tr:hover td{background:rgba(0,229,255,.025);}
+.rn{font-family:var(--mono);font-size:.63rem;width:22px;height:22px;border-radius:3px;background:var(--s3);border:1px solid var(--border2);display:inline-flex;align-items:center;justify-content:center;color:var(--text-dim);}
+.ss{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap;}
+.ssb{font-family:var(--mono);font-size:.6rem;padding:2px 7px;border:1px solid var(--border);border-radius:2px;cursor:pointer;transition:all .15s;user-select:none;letter-spacing:.06em;}
+.ssb:hover{border-color:var(--text-mid);}
+.ssb.s-ok{border-color:var(--green);background:var(--green-dim);color:var(--green);}
+.ssb.s-warn{border-color:var(--yellow);background:var(--yellow-dim);color:var(--yellow);}
+.ssb.s-fail{border-color:var(--red);background:var(--red-dim);color:var(--red);}
+.ssb.s-skip{border-color:var(--text-dim);background:rgba(61,90,122,.15);color:var(--text-dim);}
+.mi{width:100%;background:#080d16;border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:.72rem;padding:4px 8px;border-radius:2px;outline:none;margin-top:4px;transition:border-color .2s;}
+.mi:focus{border-color:var(--cyan);}
+.ml{font-size:.6rem;color:var(--text-dim);margin-top:2px;letter-spacing:.04em;}
+.crit{font-size:.67rem;color:var(--text-mid);line-height:1.55;border-left:2px solid var(--border2);padding-left:7px;margin-top:4px;}
+.crit.pass{border-color:var(--green);color:var(--green);}
+.crit.fail{border-color:var(--red);color:var(--red);}
+.crit.warn{border-color:var(--yellow);color:var(--yellow);}
+
+/* SUMMARY CARDS */
+.sc-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:15px;}
+@media(max-width:900px){.sc-grid{grid-template-columns:repeat(2,1fr);}}
+.sc{background:var(--s2);border:1px solid var(--border);border-radius:4px;padding:12px 14px;text-align:center;}
+.sc .v{font-family:var(--mono);font-size:1.75rem;font-weight:bold;line-height:1;}
+.sc .lb{font-size:.63rem;color:var(--text-dim);letter-spacing:.07em;text-transform:uppercase;margin-top:5px;}
+
+/* FAULT TREE */
+.ft-root{padding:8px 14px;border:1px solid var(--red);border-radius:3px;background:var(--red-dim);color:var(--red);text-align:center;margin-bottom:12px;font-family:var(--mono);font-size:.77rem;letter-spacing:.06em;}
+.ft-br{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-left:12px;border-left:2px solid var(--border);margin-left:16px;}
+@media(max-width:700px){.ft-br{grid-template-columns:1fr;}}
+.ft-n{padding:8px 11px;border:1px solid var(--border);border-radius:3px;background:var(--s1);transition:all .2s;}
+.ft-n.warn{border-color:var(--yellow);background:var(--yellow-dim);}
+.ft-n.crit{border-color:var(--red);background:var(--red-dim);}
+.ft-n .nt{font-family:var(--mono);font-size:.7rem;margin-bottom:3px;color:var(--text-dim);}
+.ft-n.warn .nt{color:var(--yellow);}.ft-n.crit .nt{color:var(--red);}
+.ft-n .nd{font-size:.64rem;color:var(--text-dim);line-height:1.5;}
+.ft-n.warn .nd,.ft-n.crit .nd{color:var(--text-mid);}
+
+/* THERMAL PATH */
+.tp{display:flex;align-items:stretch;gap:0;margin:10px 0;overflow-x:auto;}
+.tp-nd{flex:1;min-width:70px;text-align:center;padding:10px 6px;border:1px solid var(--border);border-radius:3px;background:var(--s1);}
+.tp-nd .tl{font-family:var(--mono);font-size:.6rem;color:var(--text-dim);text-transform:uppercase;margin-bottom:4px;}
+.tp-nd .tv{font-family:var(--mono);font-size:1.05rem;font-weight:bold;}
+.tp-ar{display:flex;align-items:center;padding:0 3px;color:var(--text-dim);font-size:.9rem;flex-shrink:0;}
+
+/* GAUGE */
+.gw{display:flex;flex-direction:column;align-items:center;padding:10px 0;}
+.gw svg{width:150px;overflow:visible;}
+
+/* RISK BARS */
+.rb-w{margin:8px 0;}
+.rb-t{height:7px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:3px;}
+.rb-f{height:100%;border-radius:4px;transition:width .8s cubic-bezier(.25,.46,.45,.94);}
+.rb-l{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.6rem;color:var(--text-dim);}
+
+/* SCORE RING */
+.ring-w{display:flex;justify-content:center;flex-wrap:wrap;gap:18px;padding:10px 0;}
+.ring-i{text-align:center;}
+.ring-i svg{width:76px;height:76px;}
+.ring-i .rn2{font-size:.62rem;color:var(--text-dim);margin-top:5px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;}
+
+/* DIAG */
+.dl{display:flex;flex-direction:column;gap:9px;}
+.dc{border:1px solid var(--border);border-radius:3px;padding:10px 13px;background:rgba(8,11,16,.6);display:flex;align-items:flex-start;gap:10px;animation:fu .35s ease both;}
+@keyframes fu{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:translateY(0);}}
+.dc.h{border-left:3px solid var(--red);}.dc.m{border-left:3px solid var(--yellow);}.dc.l{border-left:3px solid var(--green);}
+.di{font-size:1.1rem;flex-shrink:0;margin-top:1px;}
+.dt{font-size:.8rem;font-weight:500;margin-bottom:3px;}
+.dd{font-size:.7rem;color:var(--text-mid);line-height:1.6;}
+.da{font-size:.67rem;color:var(--cyan);margin-top:4px;font-family:var(--mono);}
+
+/* REC */
+.rec-ul{list-style:none;}
+.rec-ul li{padding:8px 0 8px 18px;border-bottom:1px solid rgba(28,45,72,.4);font-size:.75rem;color:var(--text);position:relative;line-height:1.6;}
+.rec-ul li::before{content:'▶';position:absolute;left:0;color:var(--cyan);font-size:.58rem;top:11px;}
+.rec-ul li:last-child{border-bottom:none;}
+.rec-ul li strong{color:var(--orange);font-weight:500;}
+
+/* VERDICT */
+.vbox{border:1px solid var(--border);border-radius:4px;padding:14px 18px;display:flex;align-items:center;gap:15px;margin-top:14px;background:var(--s2);}
+.vbdg{font-family:var(--mono);font-size:.68rem;padding:5px 13px;border-radius:2px;letter-spacing:.1em;text-transform:uppercase;flex-shrink:0;}
+.vtxt{font-size:.75rem;color:var(--text-mid);line-height:1.6;}
+
+/* REPORT */
+.rpt-hd{background:linear-gradient(135deg,var(--s1),var(--s2));border:1px solid var(--border);border-radius:4px;padding:20px;margin-bottom:15px;}
+.rpt-title{font-family:var(--mono);font-size:1rem;color:var(--cyan);letter-spacing:.08em;}
+.rpt-meta{font-size:.7rem;color:var(--text-dim);margin-top:5px;font-family:var(--mono);}
+.ab-tbl{width:100%;border-collapse:collapse;}
+.ab-tbl th{font-family:var(--mono);font-size:.63rem;color:var(--text-dim);padding:7px 10px;text-align:left;border-bottom:1px solid var(--border2);background:var(--s1);letter-spacing:.07em;text-transform:uppercase;}
+.ab-tbl td{font-size:.73rem;padding:8px 10px;border-bottom:1px solid rgba(28,45,72,.4);line-height:1.5;}
+.ab-tbl tr:last-child td{border-bottom:none;}
+.tag{display:inline-block;font-family:var(--mono);font-size:.58rem;padding:1px 6px;border-radius:2px;letter-spacing:.06em;}
+.tf{background:var(--red-dim);border:1px solid var(--red);color:var(--red);}
+.tw{background:var(--yellow-dim);border:1px solid var(--yellow);color:var(--yellow);}
+.tok{background:var(--green-dim);border:1px solid var(--green);color:var(--green);}
+.print-btn{margin-left: auto;
+    display: block;font-family:var(--mono);font-size:.72rem;letter-spacing:.1em;padding:8px 20px;background:transparent;border:1px solid var(--orange);color:var(--orange);border-radius:3px;cursor:pointer;transition:all .2s;}
+.print-btn:hover{background:var(--orange-dim);}
+
+/* STEP BAR */
+.step-bar{display:flex;align-items:center;gap:0;margin-bottom:18px;}
+.step-i{display:flex;flex-direction:column;align-items:center;flex:1;}
+.step-c{width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:var(--s1);font-family:var(--mono);font-size:.7rem;display:flex;align-items:center;justify-content:center;color:var(--text-dim);transition:all .3s;position:relative;z-index:1;}
+.step-lbl{font-size:.58rem;color:var(--text-dim);margin-top:5px;font-family:var(--mono);letter-spacing:.04em;white-space:nowrap;}
+.step-ln{flex:1;height:1px;background:var(--border);margin-bottom:23px;}
+.step-ln.done{background:var(--cyan);}
+@media(max-width:600px){.step-lbl{display:none;}}
+
+/* MISC */
+hr.dv{border:none;border-top:1px solid var(--border);margin:13px 0;}
+.st{font-family:var(--mono);font-size:.67rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:11px;padding-bottom:5px;border-bottom:1px solid var(--border);}
+.note{background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.12);border-radius:3px;padding:9px 12px;font-size:.72rem;color:var(--text-mid);line-height:1.6;margin-top:10px;}
+.note strong{color:var(--cyan);}
+.mono-t{font-family:var(--mono);font-size:.63rem;color:var(--text-dim);}
+</style>
+<style>
+/* PWA INSTALL BANNER */
+#pwa-banner{display:none;position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:9999;
+  background:#0f1520;border:1px solid #00e5ff;border-radius:6px;padding:12px 18px;
+  display:flex;align-items:center;gap:12px;box-shadow:0 0 24px rgba(0,229,255,.18);
+  font-family:'Share Tech Mono',monospace;font-size:.78rem;color:#c2d4ee;
+  min-width:280px;max-width:90vw;}
+#pwa-banner.hidden{display:none!important;}
+#pwa-install-btn{background:transparent;border:1px solid #00e5ff;color:#00e5ff;
+  font-family:'Share Tech Mono',monospace;font-size:.72rem;letter-spacing:.1em;
+  padding:6px 14px;border-radius:3px;cursor:pointer;transition:all .2s;white-space:nowrap;}
+#pwa-install-btn:hover{background:rgba(0,229,255,.15);}
+#pwa-dismiss{background:none;border:none;color:#3d5a7a;cursor:pointer;font-size:1.1rem;padding:0 0 0 4px;line-height:1;}
+#pwa-dismiss:hover{color:#7a9abf;}
+</style>
+</head>
+<body>
+<!-- PWA INSTALL BANNER -->
+<div id="pwa-banner" class="hidden">
+  <img src="icon-72x72.png" width="28" height="28" style="border-radius:4px;flex-shrink:0;">
+  <span>安裝 IGBT-TSD 到主畫面</span>
+  <button id="pwa-install-btn">安裝</button>
+  <button id="pwa-dismiss" title="關閉">✕</button>
+</div>
+<div class="wrap">
+
+<!-- HEADER -->
+<header>
+  <svg class="hd-icon" viewBox="0 0 48 48" fill="none">
+    <rect x="1" y="1" width="46" height="46" rx="3" stroke="#1c2d48" stroke-width="1.2"/>
+    <rect x="14" y="12" width="20" height="24" rx="2" fill="#0b0f18" stroke="#00e5ff" stroke-width="1.1"/>
+    <line x1="10" y1="20" x2="14" y2="20" stroke="#00e5ff" stroke-width="1.3"/>
+    <line x1="10" y1="28" x2="14" y2="28" stroke="#00e5ff" stroke-width="1.3"/>
+    <line x1="34" y1="20" x2="38" y2="20" stroke="#00e5ff" stroke-width="1.3"/>
+    <line x1="34" y1="28" x2="38" y2="28" stroke="#00e5ff" stroke-width="1.3"/>
+    <line x1="20" y1="6" x2="20" y2="12" stroke="#ff6b35" stroke-width="1.3"/>
+    <line x1="28" y1="6" x2="28" y2="12" stroke="#ff6b35" stroke-width="1.3"/>
+    <line x1="20" y1="36" x2="20" y2="42" stroke="#ff6b35" stroke-width="1.3"/>
+    <line x1="28" y1="36" x2="28" y2="42" stroke="#ff6b35" stroke-width="1.3"/>
+    <rect x="19" y="19" width="10" height="10" rx="1" fill="#00e5ff" opacity=".2"/>
+    <rect x="21" y="21" width="6" height="6" rx=".5" fill="#00e5ff" opacity=".55"/>
+    <circle cx="24" cy="24" r="1.5" fill="#00e5ff"/>
+  </svg>
+  <div>
+    <div class="hd-title">IGBT Analyzer</div>
+    <div class="hd-sub">IGBT 模組過溫根因分析 v2.1</div>
+  </div>
+  <div class="hd-right">
+    <div class="sys-tag"><span class="live-dot"></span>ONLINE <span id="ts_d" style="color:var(--text-mid);margin-left:6px;">--</span></div>
+  </div>
+</header>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab-btn active" onclick="swTab('ti')">參數輸入</button>
+  <button class="tab-btn" onclick="swTab('tc')">現場檢測</button>
+  <button class="tab-btn" onclick="swTab('tr')">異常報告</button>
+</div>
+
+<!-- ══ TAB 1: INPUT & ANALYSIS ══ -->
+<div class="tab-panel active" id="ti">
+  <div class="g2" style="margin-bottom:13px;">
+    <div class="panel">
+      <div class="ph"><span style="color:var(--cyan)">◈</span><span class="lbl">熱學參數</span><span class="badge">THERMAL INPUT</span></div>
+      <div class="pb">
+        <div class="ig"><label>IGBT 電壓等級　選擇後自動調整各參數範圍</label>
+          <div class="rg" id="rVlv">
+            <div class="rb" data-val="600"   onclick="setVlv(this)">600V</div>
+            <div class="rb active" data-val="1200"  onclick="setVlv(this)">1200V</div>
+            <div class="rb" data-val="1700"  onclick="setVlv(this)">1700V</div>
+            <div class="rb" data-val="3300"  onclick="setVlv(this)">3300V</div>
+            <div class="rb" data-val="4500"  onclick="setVlv(this)">4500V</div>
+            <div class="rb" data-val="6500"  onclick="setVlv(this)">6500V</div>
+          </div>
+          <div id="vlvHint" style="font-family:var(--mono);font-size:.6rem;color:var(--text-dim);margin-top:5px;padding:4px 8px;background:rgba(0,229,255,.04);border-radius:2px;border-left:2px solid var(--cyan);">1200V：工業變頻、UPS、太陽能逆變器</div>
+        </div>
+        <div class="ig"><label>額定集電極電流 I_C (A)</label><div class="ir"><input type="range" id="sIc" min="10" max="3600" value="300" step="10" oninput="sv('sIc','dIc',v=>v+' A')"><span class="vd" id="dIc">300 A</span></div></div>
+        <div class="ig">
+          <label>單次切換能量 E_sw (mJ/pulse)　<span style="color:var(--text-dim);text-transform:none;font-size:.6rem;">E_on+E_off，查 datasheet @ Vcc×I_C 額定點</span></label>
+          <div class="ir"><input type="range" id="sEsw" min="0.1" max="2000" value="5" step="0.1" oninput="sv('sEsw','dEsw',v=>{const n=+v;return n>=1000?(n/1000).toFixed(2)+' J':n.toFixed(1)+' mJ';})"><span class="vd" id="dEsw">5.0 mJ</span></div>
+          <div style="font-family:var(--mono);font-size:.59rem;color:var(--text-dim);margin-top:3px;">參考：1200V/300A≈5mJ；1700V/1000A≈50mJ；3300V/1500A≈18000mJ；6500V/400A≈15000mJ</div>
+        </div>
+        <div class="ig"><label>導通壓降 Vce(on) (V)</label><div class="ir"><input type="range" id="sVce" min="0.5" max="9.0" step="0.05" value="2.0" oninput="sv('sVce','dVce',v=>parseFloat(v).toFixed(2)+' V')"><span class="vd" id="dVce">2.00 V</span></div></div>
+        <div class="ig"><label>開關頻率 f_sw (Hz)</label><div class="ir"><input type="range" id="sFsw" min="50" max="20000" value="4000" step="50" oninput="sv('sFsw','dFsw',v=>{const n=+v;return n>=1000?(n/1000).toFixed(1)+' kHz':n+' Hz';})"><span class="vd" id="dFsw">4.0 kHz</span></div></div>
+        <div class="ig"><label>DC 鏈電壓 V_cc (V)　<span style="color:var(--text-dim);text-transform:none;font-size:.6rem;">用於 E_sw 換算</span></label>
+          <div class="ir"><input type="range" id="sVcc" min="100" max="6000" value="700" step="50" oninput="sv('sVcc','dVcc',v=>v+' V')"><span class="vd" id="dVcc">700 V</span></div>
+        </div>
+        <div class="ig"><label>實際負載率 Load %</label><div class="ir"><input type="range" id="sLd" min="10" max="100" value="85" oninput="sv('sLd','dLd',v=>v+'%')"><span class="vd" id="dLd">85%</span></div></div>
+        <div class="ig"><label>量測結溫 T_j (°C)</label><div class="ir"><input type="range" id="sTj" min="20" max="175" value="130" oninput="sv('sTj','dTj',v=>v+'°C')"><span class="vd" id="dTj">130°C</span></div></div>
+        <div class="ig"><label>環境溫度 T_amb (°C)</label><div class="ir"><input type="range" id="sTa" min="-20" max="55" value="35" oninput="sv('sTa','dTa',v=>v+'°C')"><span class="vd" id="dTa">35°C</span></div></div>
+        <div class="ig"><label>額定最高結溫 T_j(max)</label>
+          <div class="rg" id="rTj"><div class="rb active" data-val="125" onclick="sr('rTj',this)">125°C</div><div class="rb" data-val="150" onclick="sr('rTj',this)">150°C</div><div class="rb" data-val="175" onclick="sr('rTj',this)">175°C</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph"><span style="color:var(--yellow)">◈</span><span class="lbl">設計條件 &amp; 缺陷</span><span class="badge">DESIGN CHECK</span></div>
+      <div class="pb">
+        <div class="ig"><label>熱阻 R_th(j-a) (°C/W)</label><div class="ir"><input type="range" id="sRt" min="0.001" max="2.0" step="0.001" value="0.05" oninput="sv('sRt','dRt',v=>parseFloat(v).toFixed(3)+' °C/W')"><span class="vd" id="dRt">0.050 °C/W</span></div></div>
+        <div class="ig"><label>並聯模組數量</label>
+          <div class="rg" id="rPar"><div class="rb active" data-val="1" onclick="sr('rPar',this)">單模組</div><div class="rb" data-val="2" onclick="sr('rPar',this)">2並聯</div><div class="rb" data-val="3" onclick="sr('rPar',this)">3並聯</div><div class="rb" data-val="4" onclick="sr('rPar',this)">4並聯</div></div>
+        </div>
+        <div class="ig"><label>散熱方式</label>
+          <div class="rg" id="rHs"><div class="rb active" data-val="old" onclick="sr('rHs',this)">原廠空冷</div><div class="rb" data-val="new" onclick="sr('rHs',this)">已換散熱器</div><div class="rb" data-val="liquid" onclick="sr('rHs',this)">液冷系統</div></div>
+        </div>
+        <hr class="dv">
+        <div class="st">現場觀察異常勾選</div>
+        <div id="dfList"></div>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;gap:10px;margin-top:6px;">
+    <button class="btn-run" style="flex:1;" onclick="runA()">▶ 執行根因分析 / RUN ANALYSIS</button>
+    <button class="btn-run" style="width:auto;padding:13px 18px;border-color:var(--yellow);color:var(--yellow);" onclick="fillDemo()">⚡ 示範數值</button>
+  </div>
+
+  <div id="res" style="display:none;margin-top:18px;">
+    <div class="sc-grid" id="scCards"></div>
+    <div class="g3" style="margin-bottom:15px;">
+      <div class="panel">
+        <div class="ph"><span style="color:var(--cyan)">◈</span><span class="lbl">結溫儀表</span></div>
+        <div class="pb">
+          <div class="gw">
+            <svg viewBox="0 0 150 85">
+              <path d="M18,76 A57,57 0 0,1 132,76" fill="none" stroke="#1c2d48" stroke-width="10" stroke-linecap="round"/>
+              <path id="garc" d="M18,76 A57,57 0 0,1 132,76" fill="none" stroke="#00e676" stroke-width="10" stroke-linecap="round" stroke-dasharray="179" stroke-dashoffset="90"/>
+              <text id="gval" font-family="Share Tech Mono,monospace" font-size="22" fill="#00e676" x="75" y="66" text-anchor="middle" dominant-baseline="middle">--</text>
+              <text font-family="Share Tech Mono,monospace" font-size="9" fill="#3d5a7a" x="75" y="79" text-anchor="middle">°C  T_j</text>
+            </svg>
+            <div id="tjm" style="width:100%;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="ph"><span style="color:var(--orange)">◈</span><span class="lbl">功耗估算</span></div>
+        <div class="pb" style="text-align:center;padding-top:12px;">
+          <div style="font-family:var(--mono);font-size:2.2rem;color:var(--orange);" id="dPl">-- W</div>
+          <div style="font-size:.66rem;color:var(--text-dim);margin:5px 0 12px;font-family:var(--mono);letter-spacing:.06em;">每模組估算功耗 P_loss</div>
+          <div class="rb-w"><div class="rb-t"><div class="rb-f" id="bPl" style="width:0%;background:var(--orange);"></div></div><div class="rb-l"><span>0 W</span><span id="bPlM">-- W</span></div></div>
+          <div style="font-family:var(--mono);font-size:.67rem;color:var(--text-dim);margin-top:7px;">設計上限 P_max = <span id="dPmax" style="color:var(--orange);">--</span> W</div>
+          <div id="dPdetail" style="font-family:var(--mono);font-size:.62rem;color:var(--text-dim);margin-top:5px;"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="ph"><span style="color:var(--red)">◈</span><span class="lbl">綜合風險</span></div>
+        <div class="pb" style="text-align:center;padding-top:8px;">
+          <div style="font-family:var(--mono);font-size:2.8rem;font-weight:bold;" id="dRisk">--</div>
+          <div style="font-family:var(--mono);font-size:.62rem;color:var(--text-dim);letter-spacing:.1em;text-transform:uppercase;margin:4px 0 10px;">風險指數 / 100</div>
+          <div class="rb-w"><div class="rb-t" style="height:10px;border-radius:5px;"><div class="rb-f" id="bRisk" style="width:0%;background:linear-gradient(90deg,var(--green),var(--yellow),var(--red));border-radius:5px;"></div></div><div class="rb-l"><span style="color:var(--green);">低風險</span><span style="color:var(--yellow);">警戒</span><span style="color:var(--red);">高危</span></div></div>
+          <div style="margin-top:10px;display:inline-block;font-family:var(--mono);font-size:.75rem;padding:4px 14px;border-radius:3px;" id="rBdg">--</div>
+        </div>
+      </div>
+    </div>
+    <div class="g2" style="margin-bottom:13px;">
+      <div class="panel">
+        <div class="ph"><span style="color:var(--red)">◈</span><span class="lbl">故障樹分析 FTA</span><span class="badge">FAULT TREE</span></div>
+        <div class="pb">
+          <div class="ft-root">⚠ IGBT 模組過溫失效  TOP EVENT</div>
+          <div class="ft-br">
+            <div class="ft-n" id="fPwr"><div class="nt">⚡ 功耗過大</div><div class="nd" id="fPwrD">--</div></div>
+            <div class="ft-n" id="fThm"><div class="nt" id="fThmT">🌡 散熱不足</div><div class="nd" id="fThmD">--</div></div>
+            <div class="ft-n" id="fBal"><div class="nt">⚖ 均流不良</div><div class="nd" id="fBalD">--</div></div>
+            <div class="ft-n" id="fPkg"><div class="nt">🔧 封裝缺陷</div><div class="nd" id="fPkgD">--</div></div>
+          </div>
+          <hr class="dv">
+          <div class="st">熱傳導路徑節點溫度</div>
+          <div class="tp">
+            <div class="tp-nd"><div class="tl">結溫 T_j</div><div class="tv" id="tpTj" style="color:var(--red);">--</div></div>
+            <div class="tp-ar">→</div>
+            <div class="tp-nd"><div class="tl">殼溫 T_c</div><div class="tv" id="tpTc" style="color:var(--orange);">--</div></div>
+            <div class="tp-ar">→</div>
+            <div class="tp-nd"><div class="tl">熱片 T_h</div><div class="tv" id="tpTh" style="color:var(--yellow);">--</div></div>
+            <div class="tp-ar">→</div>
+            <div class="tp-nd"><div class="tl">環境 T_a</div><div class="tv" id="tpTa" style="color:var(--green);">--</div></div>
+          </div>
+          <div class="mono-t" style="margin-top:6px;">估算 R_th(j-a)：<span id="dRthC" style="color:var(--cyan);">--</span> °C/W</div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="ph"><span style="color:var(--green)">◈</span><span class="lbl">四大因子評估</span><span class="badge">FACTOR SCORES</span></div>
+        <div class="pb">
+          <div class="ring-w" id="rings"></div>
+          <hr class="dv">
+          <div class="st">診斷結果</div>
+          <div class="dl" id="diagCards"></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="margin-bottom:15px;">
+      <div class="ph"><span style="color:var(--cyan)">◈</span><span class="lbl">改善建議 &amp; 綜合判定</span><span class="badge">RECOMMENDATIONS</span></div>
+      <div class="pb"><div class="g2"><ul class="rec-ul" id="recList"></ul><div><div class="vbox" id="vbox"><div class="vbdg" id="vBdg">--</div><div class="vtxt" id="vTxt">--</div></div></div></div></div>
+    </div>
+  </div>
+</div><!-- /tab1 -->
+
+<!-- ══ TAB 2: CHECKLIST ══ -->
+<div class="tab-panel" id="tc">
+  <div class="step-bar" id="stepBar"></div>
+  <div class="panel" style="margin-bottom:15px;">
+    <div class="ph"><span style="color:var(--cyan)">◈</span><span class="lbl">IGBT 模組現場檢測表</span><span class="badge">10 ITEMS</span></div>
+    <div class="pb" style="padding:0;">
+      <table class="ck-table">
+        <thead><tr><th style="width:32px;">#</th><th style="min-width:105px;">檢測項目</th><th style="min-width:120px;">量測輸入</th><th style="min-width:130px;">判斷基準 &amp; 結果</th><th style="min-width:95px;">狀態</th></tr></thead>
+        <tbody id="ckBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="note"><strong>使用方式：</strong>逐項量測後輸入數值，系統自動與判斷基準比對並標示狀態。完成後至【③ 異常報告】頁面產生報告。交叉驗證：散熱與均流問題常互相影響，需同時確認。</div>
+</div>
+
+<!-- ══ TAB 3: REPORT ══ -->
+<div class="tab-panel" id="tr">
+  <div class="rpt-hd">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div>
+        <div class="rpt-title">📋 IGBT 模組過溫檢測異常報告</div>
+        <div class="rpt-meta">產生時間：<span id="rptTime">--</span> <br>異常狀態：<span id="rptAb" style="color:var(--red);">0</span> 項 ｜ 警戒狀態：<span id="rptWn" style="color:var(--yellow);">0</span> 項</div>
+      </div>
+      </div>
+      <button class="print-btn" onclick="window.print()">⎙ 列印 / 匯出</button>
+    
+  </div>
+  <div class="g2" style="margin-bottom:13px;">
+    <div class="panel">
+      <div class="ph"><span style="color:var(--red)">◈</span><span class="lbl">異常與警戒項目</span></div>
+      <div class="pb" style="padding:0;">
+        <table class="ab-tbl"><thead><tr><th>#</th><th>檢測項目</th><th>量測值</th><th>判斷基準</th><th>狀態</th></tr></thead><tbody id="rptBody"></tbody></table>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph"><span style="color:var(--cyan)">◈</span><span class="lbl">檢測統計</span></div>
+      <div class="pb">
+        <div id="rptStats"></div>
+        <hr class="dv">
+        <div class="st">處理優先順序建議</div>
+        <ul class="rec-ul" id="rptPrio"></ul>
+      </div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="ph"><span style="color:var(--orange)">◈</span><span class="lbl">異常根因交叉分析</span></div>
+    <div class="pb"><div id="rptCross"></div></div>
+  </div>
+</div>
+
+<div style="text-align:center;margin:20px 0 10px;font-family:var(--mono);font-size:.58rem;color:#1e2d48;letter-spacing:.08em;">
+  IGBT THERMAL FAULT ANALYZER v2.1 ／ FOR REFERENCE USE ONLY ／ VERIFY WITH ACTUAL MODULE DATASHEET
+</div>
+</div><!-- /wrap -->
+
+<script>
+// ══ DATA ══════════════════════════════════════════════════════
+const DEFECTS=[
+  {key:'void',  label:'晶元封裝空洞 (Void) 疑慮'},
+  {key:'solder',label:'焊接或銅箔接觸不良'},
+  {key:'imbal', label:'並聯均流偏差 >10%'},
+  {key:'gate',  label:'閘極驅動時序不一致'},
+  {key:'grease',label:'導熱矽脂老化或塗抹不均'},
+  {key:'fan',   label:'風扇風量不足或異音'},
+];
+
+const CKS=[
+  {id:'c1',name:'結–殼熱阻',target:'模組晶片 vs 殼體',method:'熱電偶量測 T_j 與 T_c，計算 ΔT/功耗',crit:'與設計值差異 ≤ 10%，否則判定異常',
+   flds:[{id:'c1_tj',lb:'T_j 量測 (°C)'},{id:'c1_tc',lb:'T_c 量測 (°C)'},{id:'c1_p',lb:'功耗 P (W)'},{id:'c1_rd',lb:'設計 R_th(j-c) (°C/W)'}],
+   eval(v,n){const tj=+v.c1_tj,tc=+v.c1_tc,p=+v.c1_p,rd=+v.c1_rd;if([tj,tc,p,rd].some(isNaN)||p<=0)return null;const r=(tj-tc)/p,dev=Math.abs(r-rd)/rd*100;return{val:`R_th=${r.toFixed(3)} °C/W，偏差${dev.toFixed(1)}%`,ok:dev<=10,warn:dev>5&&dev<=10};}},
+  {id:'c2',name:'殼–散熱片熱阻',target:'模組底面 vs 散熱片',method:'熱電偶量測 T_c 與散熱片溫度',crit:'ΔT 不應超過 5–10°C',
+   flds:[{id:'c2_tc',lb:'T_c 殼溫 (°C)'},{id:'c2_th',lb:'T_h 散熱片溫度 (°C)'}],
+   eval(v,n){const tc=+v.c2_tc,th=+v.c2_th;if(isNaN(tc)||isNaN(th))return null;const dt=tc-th;return{val:`ΔT = ${dt.toFixed(1)}°C`,ok:dt<=5,warn:dt>5&&dt<=10};}},
+  {id:'c3',name:'導熱介質品質',target:'導熱膏 / 導熱墊',method:'拆解檢查塗佈均勻性、厚度，或壓敏紙測壓力分佈',crit:'無氣泡、裂縫，壓力分佈均勻',
+   flds:[{id:'c3_cov',lb:'有效覆蓋率 (%)'},{id:'c3_unif',lb:'均勻度評分 (1=差 / 5=優)'}],
+   eval(v,n){const cov=+v.c3_cov,unif=+v.c3_unif;if(isNaN(cov)&&isNaN(unif))return null;const ok=cov>=95&&unif>=4,warn=(cov>=85&&cov<95)||(unif>=3&&unif<4);return{val:`覆蓋率 ${cov}%，均勻度 ${unif}/5`,ok,warn:!ok&&warn};}},
+  {id:'c4',name:'散熱器效能',target:'散熱片與風扇',method:'風速計測風量，紅外線熱影像檢查表面溫度',crit:'風量達設計值，表面溫度均勻',
+   flds:[{id:'c4_fl',lb:'實測風量 (CFM)'},{id:'c4_ds',lb:'設計風量 (CFM)'},{id:'c4_dt',lb:'熱影像最大溫差 (°C)'}],
+   eval(v,n){const fl=+v.c4_fl,ds=+v.c4_ds,dt=+v.c4_dt;if(isNaN(fl)||isNaN(ds))return null;const r=fl/ds*100,dtOk=isNaN(dt)||dt<=10;return{val:`風量達成率 ${r.toFixed(1)}%${!isNaN(dt)?`，熱影像溫差 ${dt.toFixed(1)}°C`:''}`,ok:r>=95&&dtOk,warn:(r>=85&&r<95)||(!dtOk&&dt<=15)};}},
+  {id:'c5',name:'接觸電阻',
+   targetFn:n=>`${n}組模組端子與母排`,
+   target:'模組端子與母排',
+   method:'量測端子壓降，檢查螺絲鎖固力與接觸面',
+   crit:'各模組壓降差異 ≤ 5%，接觸面無氧化',
+   fldsFn:n=>Array.from({length:n},(_,i)=>({id:`c5_v${i+1}`,lb:`模組 ${i+1} 端子壓降 (mV)`})),
+   flds:[],
+   eval(v,n){const vs=Array.from({length:n},(_,i)=>+v[`c5_v${i+1}`]).filter(x=>!isNaN(x)&&x>0);if(vs.length<2)return null;const mx=Math.max(...vs),mn=Math.min(...vs),avg=vs.reduce((a,b)=>a+b,0)/vs.length,dev=(mx-mn)/avg*100;return{val:`${n}組壓降差異 ${dev.toFixed(1)}%，均值 ${avg.toFixed(2)} mV`,ok:dev<=5,warn:dev>5&&dev<=10};}},
+  {id:'c6',name:'電流分佈',
+   targetFn:n=>n===1?'單模組（不適用均流比較）':`${n}組並聯模組`,
+   target:'並聯模組',
+   method:'示波器+電流探棒量測各模組電流波形',
+   critFn:n=>n===1?'單模組無需均流檢測，量測單一電流確認正常':'各模組電流差異 ≤ 10%，無單管過載',
+   crit:'電流差異 ≤ 10%，無單管過載',
+   fldsFn:n=>Array.from({length:n},(_,i)=>({id:`c6_i${i+1}`,lb:`模組 ${i+1} 電流 (A)`})),
+   flds:[],
+   eval(v,n){if(n===1){const i=+v.c6_i1;if(isNaN(i)||i<=0)return null;return{val:`單模組電流 ${i.toFixed(1)} A`,ok:true,warn:false};}const is=Array.from({length:n},(_,i)=>+v[`c6_i${i+1}`]).filter(x=>!isNaN(x)&&x>0);if(is.length<2)return null;const mx=Math.max(...is),mn=Math.min(...is),avg=is.reduce((a,b)=>a+b,0)/is.length,dev=(mx-mn)/avg*100;return{val:`${n}組電流差異 ${dev.toFixed(1)}%，最大 ${mx.toFixed(1)} A，均值 ${avg.toFixed(1)} A`,ok:dev<=10,warn:dev>10&&dev<=20};}},
+  {id:'c7',name:'Vce(on) 一致性',
+   targetFn:n=>n===1?'單模組晶片':`${n}組模組晶片`,
+   target:'各模組晶片',
+   method:'在相同電流下量測各模組 Vce(on)',
+   critFn:n=>n===1?'量測單一模組 Vce(on)，與規格書核對':'各模組 Vce(on) 差異 ≤ 0.1 V',
+   crit:'差異 ≤ 0.1 V',
+   fldsFn:n=>Array.from({length:n},(_,i)=>({id:`c7_v${i+1}`,lb:`模組 ${i+1} Vce(on) (V)`})),
+   flds:[],
+   eval(v,n){if(n===1){const x=+v.c7_v1;if(isNaN(x))return null;return{val:`Vce(on) = ${x.toFixed(3)} V`,ok:true,warn:false};}const vs=Array.from({length:n},(_,i)=>+v[`c7_v${i+1}`]).filter(x=>!isNaN(x));if(vs.length<2)return null;const d=Math.max(...vs)-Math.min(...vs);return{val:`${n}組 Vce(on) 差值 ${d.toFixed(3)} V（${Math.min(...vs).toFixed(3)}～${Math.max(...vs).toFixed(3)} V）`,ok:d<=0.1,warn:d>0.1&&d<=0.2};}},
+  {id:'c8',name:'開關速度一致性',
+   targetFn:n=>n===1?'單模組門極驅動路徑':`${n}組模組門極驅動路徑`,
+   target:'門極驅動路徑',
+   method:'示波器量測各模組開通/關斷時間',
+   critFn:n=>n===1?'單模組量測開通/關斷時間，與規格書核對':'各模組開通時間差 ≤ 50 ns',
+   crit:'時間差 ≤ 50 ns',
+   fldsFn:n=>Array.from({length:n},(_,i)=>({id:`c8_t${i+1}`,lb:`模組 ${i+1} 開通時間 (ns)`})),
+   flds:[],
+   eval(v,n){if(n===1){const t=+v.c8_t1;if(isNaN(t))return null;return{val:`開通時間 ${t.toFixed(0)} ns`,ok:true,warn:false};}const ts=Array.from({length:n},(_,i)=>+v[`c8_t${i+1}`]).filter(x=>!isNaN(x));if(ts.length<2)return null;const d=Math.max(...ts)-Math.min(...ts);return{val:`${n}組開通時間差 ${d.toFixed(0)} ns`,ok:d<=50,warn:d>50&&d<=100};}},
+  {id:'c9',name:'散熱均勻性',
+   targetFn:n=>n===1?'單模組表面溫度分佈':`${n}組模組表面`,
+   target:'模組表面',
+   method:'紅外線熱影像比對溫度分佈',
+   critFn:n=>n===1?'單模組表面溫度均勻，無局部熱點（溫差 ≤ 5°C）':`${n}組模組間溫差 ≤ 5°C`,
+   crit:'模組間溫差 ≤ 5°C',
+   fldsFn:n=>Array.from({length:n},(_,i)=>({id:`c9_t${i+1}`,lb:`模組 ${i+1} 表面溫度 (°C)`})),
+   flds:[],
+   eval(v,n){if(n===1){const t=+v.c9_t1;if(isNaN(t))return null;return{val:`單模組表面溫度 ${t.toFixed(1)}°C`,ok:true,warn:false};}const ts=Array.from({length:n},(_,i)=>+v[`c9_t${i+1}`]).filter(x=>!isNaN(x));if(ts.length<2)return null;const d=Math.max(...ts)-Math.min(...ts);return{val:`${n}組最大溫差 ${d.toFixed(1)}°C`,ok:d<=5,warn:d>5&&d<=10};}},
+  {id:'c10',name:'封裝焊層完整性',target:'模組內部焊層',method:'X 光或超音波（SAM）檢測焊層空洞 / 剝離',crit:'空洞率 ≤ 5%，無剝離',
+   flds:[{id:'c10_vd',lb:'空洞率（X-ray 量測）%'}],
+   eval(v,n){const x=+v.c10_vd;if(isNaN(x))return null;return{val:`空洞率 ${x.toFixed(1)}%`,ok:x<=5,warn:x>5&&x<=10};}},
+];
+
+// ══ STATE ═════════════════════════════════════════════════════
+const cSt={};
+CKS.forEach(c=>{cSt[c.id]={status:'',vals:{},er:null};});
+const dfSt={};
+
+// ══ UTILITIES ═════════════════════════════════════════════════
+function sv(sid,did,fmt){document.getElementById(did).textContent=fmt(document.getElementById(sid).value);}
+function sr(gid,el){
+  document.querySelectorAll('#'+gid+' .rb').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  // 若改變並聯數，重建現場檢測表
+  if(gid==='rPar'){
+    // 儲存現有輸入值
+    CKS.forEach(c=>{
+      const flds=c.fldsFn?c.fldsFn(4):c.flds; // 最大4組掃所有可能
+      flds.forEach(f=>{const el=document.getElementById(f.id);if(el)cSt[c.id].vals[f.id]=el.value;});
+    });
+    buildCK();
+  }
+}
+function grv(gid){const e=document.querySelector('#'+gid+' .rb.active');return e?e.dataset.val:null;}
+function rC(s){return s>=70?'var(--red)':s>=40?'var(--yellow)':'var(--green)';}
+
+
+// ══ 電壓等級預設值（自動調整各參數）════════════════════════════
+const VLV_PRESETS = {
+  600:  {Ic_max:3600, Ic_def:400,  Vce_max:3.5, Vce_def:1.8, Esw_max:100,   Esw_def:1.5,   fsw_max:20000, fsw_def:10000, Vcc_max:800,  Vcc_def:400,  Rth_def:0.10, hint:'600V：工業變頻、焊機、電源供應'},
+  1200: {Ic_max:3600, Ic_def:300,  Vce_max:5.0, Vce_def:2.0, Esw_max:500,   Esw_def:5,     fsw_max:20000, fsw_def:4000,  Vcc_max:1000, Vcc_def:700,  Rth_def:0.05, hint:'1200V：工業變頻、UPS、太陽能逆變器'},
+  1700: {Ic_max:2400, Ic_def:800,  Vce_max:6.0, Vce_def:2.5, Esw_max:2000,  Esw_def:30,    fsw_max:10000, fsw_def:2000,  Vcc_max:1500, Vcc_def:1000, Rth_def:0.02, hint:'1700V：中壓變頻、鐵路、風電'},
+  3300: {Ic_max:1500, Ic_def:1000, Vce_max:7.0, Vce_def:3.5, Esw_max:25000, Esw_def:18000, fsw_max:2000,  fsw_def:150,   Vcc_max:3000, Vcc_def:1800, Rth_def:0.008,hint:'3300V：鐵路牽引、中壓 STATCOM、風電併網'},
+  4500: {Ic_max:900,  Ic_def:600,  Vce_max:8.0, Vce_def:4.5, Esw_max:30000, Esw_def:25000, fsw_max:500,   fsw_def:100,   Vcc_max:4000, Vcc_def:2500, Rth_def:0.006,hint:'4500V：HVDC 換流站、大型牽引整流'},
+  6500: {Ic_max:750,  Ic_def:400,  Vce_max:9.0, Vce_def:6.5, Esw_max:40000, Esw_def:15000, fsw_max:200,   fsw_def:80,    Vcc_max:6000, Vcc_def:3600, Rth_def:0.005,hint:'6500V：VSC-HVDC、超高壓 FACTS 裝置'}
+};
+
+function setVlv(el){
+  document.querySelectorAll('#rVlv .rb').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  const v = +el.dataset.val;
+  const p = VLV_PRESETS[v];
+  if(!p) return;
+
+  // 更新 Hint
+  document.getElementById('vlvHint').textContent = p.hint;
+
+  // 調整 I_C
+  const sIc=document.getElementById('sIc');
+  sIc.max=p.Ic_max; sIc.value=p.Ic_def;
+  document.getElementById('dIc').textContent=p.Ic_def+' A';
+
+  // 調整 Vce
+  const sVce=document.getElementById('sVce');
+  sVce.max=p.Vce_max; sVce.value=p.Vce_def;
+  document.getElementById('dVce').textContent=p.Vce_def.toFixed(2)+' V';
+
+  // 調整 E_sw
+  const sEsw=document.getElementById('sEsw');
+  sEsw.max=p.Esw_max; sEsw.value=p.Esw_def;
+  const ed=p.Esw_def>=1000?(p.Esw_def/1000).toFixed(2)+' J':p.Esw_def.toFixed(1)+' mJ';
+  document.getElementById('dEsw').textContent=ed;
+
+  // 調整 f_sw
+  const sFsw=document.getElementById('sFsw');
+  sFsw.max=p.fsw_max; sFsw.step=v>=3300?50:100; sFsw.value=p.fsw_def;
+  const fd=p.fsw_def>=1000?(p.fsw_def/1000).toFixed(1)+' kHz':p.fsw_def+' Hz';
+  document.getElementById('dFsw').textContent=fd;
+
+  // 調整 V_cc
+  const sVcc=document.getElementById('sVcc');
+  sVcc.max=p.Vcc_max; sVcc.value=p.Vcc_def;
+  document.getElementById('dVcc').textContent=p.Vcc_def+' V';
+
+  // 調整 R_th
+  const sRt=document.getElementById('sRt');
+  sRt.value=p.Rth_def;
+  document.getElementById('dRt').textContent=p.Rth_def.toFixed(3)+' °C/W';
+}
+
+// ══ DEFECTS ═══════════════════════════════════════════════════
+function buildDf(){
+  document.getElementById('dfList').innerHTML=DEFECTS.map(d=>`
+    <div id="df_${d.key}" onclick="tgDf('${d.key}')" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.76rem;padding:5px 0;border-bottom:1px solid rgba(28,45,72,.4);">
+      <div style="width:15px;height:15px;border:1px solid var(--border);border-radius:2px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;" id="dfb_${d.key}"></div>
+      <span>${d.label}</span>
+    </div>`).join('');
+}
+function tgDf(k){
+  dfSt[k]=!dfSt[k];
+  const b=document.getElementById('dfb_'+k);
+  b.style.cssText=dfSt[k]?'width:15px;height:15px;border-radius:2px;background:var(--orange);border:1px solid var(--orange);display:flex;align-items:center;justify-content:center;':'width:15px;height:15px;border:1px solid var(--border);border-radius:2px;display:flex;align-items:center;justify-content:center;';
+  b.innerHTML=dfSt[k]?'<span style="color:#fff;font-size:9px;line-height:1;">✓</span>':'';
+}
+function gDf(){return Object.keys(dfSt).filter(k=>dfSt[k]);}
+
+// ══ ANALYSIS ══════════════════════════════════════════════════
+function runA(){
+  // ── 輸入讀取 ──────────────────────────────────────────────────
+  const Ic   = +document.getElementById('sIc').value;    // A，額定集電極電流
+  const Esw  = +document.getElementById('sEsw').value;   // mJ/pulse，單次切換能量（E_on+E_off）
+  const Vce  = +document.getElementById('sVce').value;   // V，導通壓降
+  const fsw  = +document.getElementById('sFsw').value;   // Hz（注意：已改為 Hz 輸入）
+  const Vcc  = +document.getElementById('sVcc').value;   // V，DC 鏈電壓
+  const ld   = +document.getElementById('sLd').value/100;
+  const Tj   = +document.getElementById('sTj').value;    // °C，量測結溫
+  const Ta   = +document.getElementById('sTa').value;    // °C，環境溫度
+  const Tjmax= +grv('rTj');
+  const Rth  = +document.getElementById('sRt').value;    // °C/W，R_th(j-a) 設計值（單模組）
+  const par  = +grv('rPar');
+  const hs   = grv('rHs');
+  const defs = gDf();
+  const vlv  = +((document.querySelector('#rVlv .rb.active')||{dataset:{val:'1200'}}).dataset.val);
+
+  // ── 熱阻分配（IEC 60747/62471 典型封裝比例）──────────────────
+  // HV 大模組（>1700V）封裝熱阻比例與標準模組類似，但絕對值更小
+  // R_th(j-c) : R_th(c-h) : R_th(h-a) ≈ 30% : 15% : 55%
+  // 液冷時 R_th(h-a) 大幅降低，c-h 比例相對提高
+  const Rth_jc = Rth * 0.30;   // 結–殼（封裝固有，幾乎不可改善）
+  const Rth_ch = Rth * 0.15;   // 殼–散熱片（含導熱介質，可改善）
+  const Rth_ha = Rth * 0.55;   // 散熱片–環境（散熱系統設計決定）
+
+  // ── P_cond 導通損耗（AC 逆變器修正版）────────────────────────
+  // 對 SPWM 三相橋式逆變器，單臂 IGBT 平均導通損耗：
+  //   P_cond = Vce(on) × I_C × k_duty
+  //   k_duty = 1/π ≈ 0.318（正弦加權平均，對稱調制）
+  //   負載率 ld 反映實際電流幅度縮放
+  // 注意：I_C 為額定峰值電流，已含在 k_duty 換算中
+  const k_duty = 1 / Math.PI;                   // ≈0.318，AC 逆變器單臂 IGBT 導通因子
+  const P_cond = Vce * Ic * ld * k_duty;        // W，導通損耗（單臂 IGBT）
+
+  // ── P_sw 切換損耗（使用 E_sw 直接計算）──────────────────────
+  // P_sw = E_sw × f_sw
+  // E_sw（mJ/pulse）來自 datasheet 測試條件（Vcc=額定，I_C=額定，T_j=125°C）
+  // 實際操作點修正：E_sw 與 Vcc 近似線性，與 I_C 近似線性
+  // 電流縮放：ld（相對額定電流）；電壓縮放：Vcc_ratio（實際/額定 DC 電壓）
+  const Vcc_rated = vlv * 0.6;                  // 典型 DC 鏈電壓 ≈ 額定壓 × 0.6
+  const Vcc_ratio = Math.min(Vcc / Vcc_rated, 1.5);   // 實際 DC/額定 DC，限制上界
+  const Esw_actual = (Esw/1000) * ld * Vcc_ratio;     // J，修正後實際切換能量/pulse
+  const P_sw = Esw_actual * fsw;                       // W，切換損耗（Hz 輸入，直接相乘）
+
+  // ── 二極體反向恢復損耗（FWD，估算）──────────────────────────
+  // 通常約為 IGBT 切換損耗的 30～50%（HV 模組更高，矽二極體恢復能量大）
+  const P_diode = P_sw * (vlv >= 3300 ? 0.50 : 0.35); // HV 取 50%，LV 取 35%
+
+  const Pl_total = P_cond + P_sw + P_diode;      // W，單模組基礎損耗合計（正常均流）
+
+  // ── 均流不良修正 ─────────────────────────────────────────────
+  // 均流偏差>10% → 最壞模組電流約為均值的 1.25 倍
+  // 導通損耗 ∝ I_C (線性)，切換損耗 ∝ I_C (線性)
+  // 整體損耗修正係數 ≈ 1.25（保守線性假設；若用二次方則1.56，過於保守）
+  const imbal_factor = defs.includes('imbal') ? 1.25 : 1.0;
+  // 各分項均乘以同一係數，確保加總一致
+  const P_cond_m  = P_cond  * imbal_factor;   // W，含均流係數
+  const P_sw_m    = P_sw    * imbal_factor;
+  const P_diode_m = P_diode * imbal_factor;
+  const Plm = P_cond_m + P_sw_m + P_diode_m;  // W，= Pl_total×imbal_factor（各分項加總驗算一致）
+
+  // ── P_max（單模組最大允許耗散）────────────────────────────────
+  // 熱學定義：T_j = T_a + P × R_th(j-a)  →  P_max = (Tjmax − Ta) / R_th(j-a)
+  // 液冷大幅降低 R_th(h-a)，有效降低 R_th(j-a)
+  const Rth_eff = hs==='liquid' ? Rth*0.45   // 液冷：R_th(h-a) 降至約 10%，整體降 55%
+                : hs==='new'    ? Rth*0.82   // 新散熱器：R_th(h-a) 降 25%，整體降 18%
+                :                  Rth;
+  const Pm = (Tjmax - Ta) / Rth_eff;             // W，單模組最大允許損耗
+
+  // ── 熱傳路徑節點溫度（由損耗正推）────────────────────────────
+  // 液冷時 R_th(h-a) 極小（0.002~0.01°C/W），散熱片幾乎等於冷卻液溫度
+  const Rth_ha_eff = hs==='liquid' ? Rth_ha*0.18  // 液冷：h-a 段大幅改善
+                   : hs==='new'    ? Rth_ha*0.72
+                   :                  Rth_ha;
+  // 矽脂老化：c-h 段熱阻增加 30～100%（取50%為保守估計）
+  const Rth_ch_eff = defs.includes('grease') ? Rth_ch * 1.5 : Rth_ch;
+  const Th = Ta + Plm * Rth_ha_eff;               // °C，散熱片（或冷卻水路壁）溫度
+  const Tc = Th + Plm * Rth_ch_eff;               // °C，殼溫（模組底面）
+  const Tj_calc = Tc + Plm * Rth_jc;              // °C，由損耗正推之結溫
+
+  // ── 由量測 T_j 反推等效熱阻（診斷用）────────────────────────
+  // R_th_measured > R_th_design 表示散熱路徑劣化
+  const Rtc = (Tj - Ta) / Math.max(Plm, 0.1);    // °C/W，反推等效 R_th(j-a)
+  const rthDev = (Rtc - Rth) / Rth * 100;        // %，與設計值偏差
+
+  // ── 結溫裕量 ──────────────────────────────────────────────────
+  const mg = Tjmax - Tj;                           // °C，以量測 T_j 計算
+
+  // ── 散熱節點觸發條件（嚴格只判斷散熱路徑問題）──────────────
+  const tC_Tj  = Tj >= Tjmax;                    // 量測結溫已超額定（熱已到達結點）
+  const tC_Rth = Rtc > Rth * 1.3 && Plm > 10;   // 反推熱阻 > 設計×130%（排除功耗極低誤差）
+  // 注意：P_loss > P_max 歸因於「功耗過大」節點，不歸因於散熱設計不良
+  const tC_P   = Plm > Pm;                       // 用於功耗節點，散熱節點以此作為輔助警示
+  const tC = tC_Tj || tC_Rth;                    // 散熱節點嚴重：只看結溫和熱阻劣化
+  const tC_any = tC || tC_P;                     // 任一嚴重條件（供整體 risk 評估用）
+
+  // tW 警戒（散熱相關）
+  const tW_Tj  = Tj >= Tjmax * 0.85;
+  const tW_Rth = Rtc > Rth * 1.1 && Rtc <= Rth * 1.3 && Plm > 10; // 熱阻略微劣化
+  const tW_def = defs.includes('grease') || hs==='old' || defs.includes('fan');
+  const tW_P = Plm > Pm * 0.80;            // 功耗接近散熱上限（熱量警示）
+  const tW = !tC && (tW_Tj || tW_Rth || tW_def || tW_P);
+
+  let sP=Math.min(100,Math.round((ld/0.8)*55+(Plm/Pm)*45));
+  let sT=Math.min(100,Math.round(((Tj-Ta)/(Tjmax-Ta))*70+(hs==='old'?18:hs==='new'?8:0)+(defs.includes('grease')?14:0)+(defs.includes('fan')?12:0)));
+  let sB=0;if(par>1){sB=defs.includes('imbal')?82:18+(par-1)*10;if(defs.includes('gate'))sB=Math.min(100,sB+18);}
+  let sPk=0;if(defs.includes('void'))sPk+=45;if(defs.includes('solder'))sPk+=42;sPk=Math.min(100,sPk);
+  const risk=Math.min(100,Math.round(sP*.30+sT*.30+sB*.20+sPk*.20+(mg<10?15:mg<20?8:0)+(tC_P&&!tC?8:0)));
+  const tjC=Tj>=Tjmax?'var(--red)':Tj>=Tjmax*.85?'var(--yellow)':'var(--green)';
+
+  document.getElementById('res').style.display='block';
+  setTimeout(()=>document.getElementById('res').scrollIntoView({behavior:'smooth',block:'start'}),80);
+
+  // Gauge
+  const ag=document.getElementById('garc'),gv=document.getElementById('gval');
+  const tjRatio=Math.max(0,Math.min((Tj-Ta)/(Tjmax-Ta),1));
+  ag.setAttribute('stroke-dashoffset',(179*(1-tjRatio)).toFixed(1));
+  ag.style.stroke=tjC;gv.setAttribute('fill',tjC);gv.textContent=Tj;
+  document.getElementById('tjm').innerHTML=`<div class="rb-w" style="margin-top:8px;"><div class="rb-t"><div class="rb-f" style="width:${Math.max(0,Math.min(mg/(Tjmax-Ta)*100,100)).toFixed(0)}%;background:${tjC};"></div></div><div class="rb-l"><span style="color:${tjC};">裕量 ${mg.toFixed(0)}°C</span><span>T_jmax ${Tjmax}°C</span></div></div>`;
+
+  // Power
+  document.getElementById('dPl').textContent=Plm.toFixed(0)+' W';
+  document.getElementById('dPmax').textContent=Pm.toFixed(0);
+  document.getElementById('bPlM').textContent=Pm.toFixed(0)+' W';
+  document.getElementById('bPl').style.width=Math.min(100,Plm/Pm*100).toFixed(0)+'%';
+  // 功耗細項（若有 id 存在）
+  const dPdetail=document.getElementById('dPdetail');
+  if(dPdetail){
+    const imbalStr = imbal_factor>1
+      ? `基礎 Pl=${Pl_total.toFixed(0)}W × 均流係數${imbal_factor.toFixed(2)} = `
+      : '';
+    dPdetail.innerHTML=`<span style="color:var(--text-mid)">P_cond=${P_cond_m.toFixed(0)}W</span> + <span style="color:var(--text-mid)">P_sw=${P_sw_m.toFixed(0)}W</span> + <span style="color:var(--text-mid)">P_diode=${P_diode_m.toFixed(0)}W</span> = <strong style="color:var(--orange)">${Plm.toFixed(0)}W</strong><br><span style="color:var(--text-dim)">${imbalStr}E_sw=${(Esw_actual*1000).toFixed(1)}mJ/pulse @ ${fsw>=1000?(fsw/1000).toFixed(1)+'kHz':fsw+'Hz'}</span>`;
+  }
+
+  // Risk
+  const rEl=document.getElementById('dRisk');rEl.textContent=risk;rEl.style.color=rC(risk);
+  document.getElementById('bRisk').style.width=risk+'%';
+  const lv=risk>=70?['var(--red)','高危警示 CRITICAL']:risk>=40?['var(--yellow)','警戒注意 WARNING']:['var(--green)','正常範圍 NORMAL'];
+  const rb=document.getElementById('rBdg');rb.style.cssText=`background:rgba(0,0,0,.3);border:1px solid ${lv[0]};color:${lv[0]};`;rb.textContent=lv[1];
+
+  // Summary
+  const sc=[{lb:'結溫裕量',v:mg.toFixed(0)+'°C',c:mg<10?'var(--red)':mg<20?'var(--yellow)':'var(--green)'},
+    {lb:'P_loss / P_max',v:(Plm/Pm*100).toFixed(0)+'%',c:Plm>Pm?'var(--red)':Plm>Pm*.85?'var(--yellow)':'var(--green)'},
+    {lb:'推算 T_j',v:(Plm>Pm*2?Tj_calc.toFixed(0)+'°C⚠':Tj_calc.toFixed(0)+'°C'),c:Tj_calc>=Tjmax?'var(--red)':Tj_calc>=Tjmax*.85?'var(--yellow)':'var(--green)'},{lb:'功耗因子',v:sP,c:rC(sP)},{lb:'散熱因子',v:sT,c:rC(sT)}];
+  document.getElementById('scCards').innerHTML=sc.map(x=>`<div class="sc"><div class="v" style="color:${x.c};">${x.v}</div><div class="lb">${x.lb}</div></div>`).join('');
+
+  // FTA
+  function sFT(id,dd,iC,iW,detail){
+    const el=document.getElementById(id);el.classList.remove('warn','crit');
+    if(iC)el.classList.add('crit');else if(iW)el.classList.add('warn');
+    document.getElementById(dd).textContent=detail;
+  }
+  const pC=ld>=.9||Plm>Pm,pW=(ld>=.8||Plm>Pm*.80)&&!pC;
+  const imbalNote = imbal_factor>1 ? `（均流×${imbal_factor.toFixed(2)}）` : '';
+  sFT('fPwr','fPwrD',pC,pW,
+    `負載${(ld*100).toFixed(0)}% ｜ P_cond=${P_cond_m.toFixed(0)}W + P_sw=${P_sw_m.toFixed(0)}W + P_diode=${P_diode_m.toFixed(0)}W = ${Plm.toFixed(0)}W${imbalNote} ｜ P_max=${Pm.toFixed(0)}W（${(Plm/Pm*100).toFixed(0)}%）`
+  );
+  // ── 散熱不足觸發條件（各條件獨立評估，避免混淆根因）──────────
+  // tC 嚴重：結溫超標 OR 功耗超過散熱上限 OR 反推熱阻比設計大（散熱劣化）
+
+  // ── FTA 散熱節點標題：依觸發原因動態修改 ─────────────────────
+  const fThmTitle = document.getElementById('fThmT');
+  if(fThmTitle){
+    if(tC_P && !tC_Tj && !tC_Rth)      fThmTitle.textContent = '⚡ 功耗超過散熱上限';
+    else if(tC_Rth && !tC_P)           fThmTitle.textContent = '🌡 散熱路徑劣化';
+    else if(tC_Tj && !tC_P && !tC_Rth) fThmTitle.textContent = '🌡 結溫超標';
+    else if(tC)                         fThmTitle.textContent = '🌡 散熱嚴重失效';
+    else if(tW)                         fThmTitle.textContent = '△ 散熱裕量偏低';
+    else                                fThmTitle.textContent = '✓ 散熱狀態正常';
+  }
+  // 組合 FTA 散熱節點說明——明確標示每個觸發原因
+  const thmReasons = [];
+  if(tC_Tj)  thmReasons.push(`⚠ T_j ${Tj}°C ≥ T_jmax ${Tjmax}°C`);
+  if(tC_P && !tC_Tj && !tC_Rth) thmReasons.push(`ℹ P_loss ${Plm.toFixed(0)}W > P_max ${Pm.toFixed(0)}W（歸因於功耗過大，散熱設計本身${Rtc<Rth*1.1?'正常':'可能不足'}）`);
+  if(tC_P)   thmReasons.push(`⚠ P_loss ${Plm.toFixed(0)}W > P_max ${Pm.toFixed(0)}W（功耗超標，非散熱劣化）`);
+  if(tC_Rth) thmReasons.push(`⚠ R_th反推 ${Rtc.toFixed(3)} > 設計×1.3（${(Rth*1.3).toFixed(3)}），散熱路徑劣化`);
+  if(tW_Tj && !tC)  thmReasons.push(`△ T_j ${Tj}°C 接近 T_jmax ${Tjmax}°C`);
+  if(tW_P && !tC)   thmReasons.push(`△ P_loss 達 P_max 的 ${(Plm/Pm*100).toFixed(0)}%`);
+  if(tW_def && !tC) thmReasons.push(`△ 散熱設備異常勾選（${[defs.includes('grease')?'矽脂老化':'',hs==='old'?'原廠空冷':'',defs.includes('fan')?'風扇不足':''].filter(Boolean).join('/')}）`);
+  if(!tC && !tW)    thmReasons.push(`✓ 散熱狀態正常 ｜ R_th反推${Rtc.toFixed(3)}（設計${Rth.toFixed(3)}，${rthDev>=0?'+':''}${rthDev.toFixed(0)}%）`);
+  const thmNote = Rtc < Rth * 0.7 ? '（R_th反推遠低於設計值，散熱實際優於設計，偏差'+rthDev.toFixed(0)+'% 不構成散熱不足依據）' : '';
+  sFT('fThm','fThmD',tC,tW,
+    thmReasons.join(' ｜ ') +
+    `${thmNote} ｜ T_c≈${Tc.toFixed(0)}°C ｜ 裕量${mg.toFixed(0)}°C ｜ ${hs==='liquid'?'液冷':hs==='new'?'新散熱':'原廠空冷'}`
+  );
+  const bC=par>1&&defs.includes('imbal'),bW=par>1&&(defs.includes('gate')||par>=3);
+  sFT('fBal','fBalD',bC,bW,par===1?'單模組無均流問題':`${par}並聯 ｜ ${defs.includes('imbal')?'偏差>10%':'偏差未知'} ｜ ${defs.includes('gate')?'閘極時序異常':'閘極時序正常'}`);
+  const kC=defs.includes('void')&&defs.includes('solder'),kW=defs.includes('void')||defs.includes('solder');
+  sFT('fPkg','fPkgD',kC,kW,`${defs.includes('void')?'封裝空洞':'無空洞疑慮'} ｜ ${defs.includes('solder')?'焊接異常':'焊接正常'}`);
+
+  // Thermal path
+  document.getElementById('tpTj').textContent=Tj+'°C';
+  // 正推溫度超過物理合理範圍時加警語
+  const overloadWarn = Plm > Pm * 2 ? ' ⚠超估' : '';
+  document.getElementById('tpTc').textContent=Tc.toFixed(0)+'°C'+overloadWarn;
+  document.getElementById('tpTh').textContent=Th.toFixed(0)+'°C'+overloadWarn;
+  document.getElementById('tpTa').textContent=Ta+'°C';
+  const Tj_calc_note = Plm > Pm * 2 ? `${Tj_calc.toFixed(0)}°C（超載${(Plm/Pm*100).toFixed(0)}%推算，非實際值）` : `${Tj_calc.toFixed(0)}°C`;
+  document.getElementById('dRthC').textContent=`${Rtc.toFixed(4)} °C/W（設計${Rth.toFixed(4)}，${rthDev>=0?'+':''}${rthDev.toFixed(0)}%） ｜ 正推T_j=${Tj_calc_note} vs 量測${Tj}°C`;
+
+  // Rings
+  function ring(s,n,c){const r=28,cx=38,cy=38,ci=2*Math.PI*r,d=ci*Math.min(s/100,1);return `<div class="ring-i"><svg viewBox="0 0 76 76"><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#1c2d48" stroke-width="7"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${c}" stroke-width="7" stroke-dasharray="${d} ${ci}" stroke-dashoffset="${ci/4}" stroke-linecap="round"/><text font-family="Share Tech Mono,monospace" font-size="14" fill="${c}" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle">${s}</text></svg><div class="rn2">${n}</div></div>`;}
+  document.getElementById('rings').innerHTML=ring(sP,'功耗',rC(sP))+ring(sT,'散熱',rC(sT))+ring(sB,'均流',rC(sB))+ring(sPk,'封裝',rC(sPk));
+
+  // Diag
+  const dc=[];
+  if(pC)dc.push({c:'h',i:'⚡',t:'功耗嚴重超標',d:`P_loss ${Plm.toFixed(0)}W 超過 P_max ${Pm.toFixed(0)}W，熱擊穿風險高。`,a:'→ 立即降載至 80%，重算散熱裕量'});
+  else if(pW)dc.push({c:'m',i:'⚡',t:'功耗偏高',d:`負載率 ${(ld*100).toFixed(0)}%，P_loss 達 P_max 的 ${(Plm/Pm*100).toFixed(0)}%。`,a:'→ 負載率建議控制在 75% 以內'});
+  else dc.push({c:'l',i:'✅',t:'功耗正常',d:`功耗裕量 ${((1-Plm/Pm)*100).toFixed(0)}%，符合降額設計。`,a:''});
+  if(tC){
+    // 根據觸發原因選擇合適的標題與說明
+    let tC_title, tC_desc, tC_action;
+    if(tC_P && !tC_Tj && !tC_Rth){
+      // 純粹是功耗超標，散熱設計本身可能沒問題
+      tC_title='功耗超過散熱上限';
+      tC_desc=`P_loss=${Plm.toFixed(0)}W 超過 P_max=${Pm.toFixed(0)}W（${(Plm/Pm*100).toFixed(0)}%），係因電流/切換能量過大，非散熱設計不良。R_th反推=${Rtc.toFixed(3)}°C/W（設計${Rth.toFixed(3)}，${rthDev>=0?'+':''}${rthDev.toFixed(0)}%，${Rtc<Rth?'反推優於設計，散熱路徑正常':'散熱路徑有劣化'}）。`;
+      tC_action='→ 優先降低 I_C 或 E_sw（減少功耗），再評估散熱升級';
+    } else if(tC_Rth && !tC_P){
+      tC_title='散熱路徑劣化';
+      tC_desc=`R_th反推=${Rtc.toFixed(3)}°C/W 超過設計值${Rth.toFixed(3)}的130%（偏差${rthDev>=0?'+':''}${rthDev.toFixed(0)}%），散熱介質或散熱器性能衰退。T_j正推${Tj_calc.toFixed(0)}°C vs 量測${Tj}°C。`;
+      tC_action='→ 檢查導熱矽脂老化、散熱器堵塞、接觸面氧化';
+    } else {
+      tC_title='散熱嚴重失效（複合因素）';
+      tC_desc=`${tC_Tj?`T_j=${Tj}°C 超過額定${Tjmax}°C；`:''}${tC_P?`P_loss=${Plm.toFixed(0)}W 超過 P_max=${Pm.toFixed(0)}W；`:''}${tC_Rth?`R_th反推偏差${rthDev.toFixed(0)}%（>+30%）；`:''}T_j正推${Tj_calc.toFixed(0)}°C，裕量${mg.toFixed(0)}°C。`;
+      tC_action='→ 立即停機，同時排查功耗與散熱路徑';
+    }
+    dc.push({c:'h',i:'🌡',t:tC_title,d:tC_desc,a:tC_action});
+  }
+  else if(tW){
+    const tW_why = [
+      tW_P?`P_loss 達 P_max 的 ${(Plm/Pm*100).toFixed(0)}%`:'',
+      tW_Tj?`T_j 接近額定（裕量${mg.toFixed(0)}°C）`:'',
+      defs.includes('grease')?'矽脂老化':'',
+      hs==='old'&&!tW_P&&!tW_Tj?'原廠散熱器未升級':'',
+      defs.includes('fan')?'風扇風量不足':'',
+    ].filter(Boolean).join('、');
+    const rthNote = Rtc < Rth * 0.7 ? `（R_th反推${Rtc.toFixed(3)} 低於設計值，散熱路徑本身正常）` : `（R_th反推${Rtc.toFixed(3)} vs 設計${Rth.toFixed(3)}，偏差${rthDev.toFixed(0)}%）`;
+    dc.push({c:'m',i:'🌡',t:'散熱裕量偏低',
+      d:`警戒原因：${tW_why}。T_j正推${Tj_calc.toFixed(0)}°C，量測${Tj}°C，裕量${mg.toFixed(0)}°C。${rthNote}`,
+      a:'→ 依觸發原因對症處理：功耗高→降載；矽脂→更換；散熱器→評估升級'});
+  }
+  else dc.push({c:'l',i:'✅',t:'散熱狀態正常',d:`T_j裕量${mg.toFixed(0)}°C，正推${Tj_calc.toFixed(0)}°C。R_th反推${Rtc.toFixed(3)} vs 設計${Rth.toFixed(3)}°C/W（${rthDev>=0?'+':''}${rthDev.toFixed(0)}%，${Rtc<Rth?'優於設計':'符合設計'}）。P_loss=${Plm.toFixed(0)}W（P_max ${(Plm/Pm*100).toFixed(0)}%）。`,a:''});
+  if(bC)dc.push({c:'h',i:'⚖',t:'均流嚴重失衡',d:`${par}並聯偏差 >10%，加上閘極時序異常，單管過載風險高。`,a:'→ 量測各模組電流，調整 Rg 或死區時間'});
+  else if(bW)dc.push({c:'m',i:'⚖',t:'均流設計需關注',d:`${par}並聯${defs.includes('gate')?"，閘極時序不一致可能造成瞬態偏流":""} ，需量測確認均流狀態。`,a:'→ 量測並聯模組間電流偏差'});
+  if(kC)dc.push({c:'h',i:'🔧',t:'封裝複合缺陷',d:'空洞與焊接異常同時存在，局部熱點溫升可能 >20°C。',a:'→ 進行 X-ray / SAM 掃描，更換受損模組'});
+  else if(kW)dc.push({c:'m',i:'🔧',t:'封裝疑慮需排查',d:`${defs.includes('void')?'晶元封裝空洞，局部熱阻增加；':''}${defs.includes('solder')?'焊接不良，造成局部過熱。':''}`,a:'→ X-ray 或 SAM 超音波掃描確認'});
+  document.getElementById('diagCards').innerHTML=dc.map((x,i)=>`<div class="dc ${x.c}" style="animation-delay:${i*.07}s"><div class="di">${x.i}</div><div><div class="dt">${x.t}</div><div class="dd">${x.d}</div>${x.a?`<div class="da">${x.a}</div>`:''}</div></div>`).join('');
+
+  // Recs
+  const rs=[];
+  if(pW||pC)rs.push('<strong>降額操作：</strong>長期負載率應 ≤ 80%，設計預留 ≥ 20% 功耗裕量。');
+  if(tW||tC)rs.push('<strong>散熱升級：</strong>優先更換高導熱矽脂（λ ≥ 6 W/m·K），評估空冷升液冷系統。');
+  if(bW||bC)rs.push('<strong>均流改善：</strong>量測各並聯模組電流，確保偏差 ≤ 5%，調整閘極驅動電阻 Rg。');
+  if(kW||kC)rs.push('<strong>封裝檢測：</strong>X-ray 或 SAM 超音波掃描，確認焊層空洞率 ≤ 5%，無剝離。');
+  rs.push('<strong>定期監控：</strong>裝設 NTC 感測器與過溫保護，預警門限設為 T_j(max) − 15°C。');
+  if(par>1)rs.push('<strong>閘極對稱佈局：</strong>並聯模組閘極 PCB 走線對稱，死區時間統一設定。');
+  document.getElementById('recList').innerHTML=rs.map(r=>`<li>${r}</li>`).join('');
+
+  // Verdict
+  const vc=risk>=70?'var(--red)':risk>=40?'var(--yellow)':'var(--green)';
+  const vl=risk>=70?'停機檢修':risk>=40?'需要監控':'狀態良好';
+  const vt=risk>=70?`綜合風險 ${risk}/100，建議立即停機全面熱學診斷，修復前須降載操作。`:risk>=40?`綜合風險 ${risk}/100，處於警戒區間，加強監控並擬定改善計畫。`:`綜合風險 ${risk}/100，熱學設計符合要求，維持定期保養。`;
+  const vb=document.getElementById('vBdg');vb.style.cssText=`background:rgba(0,0,0,.3);border:1px solid ${vc};color:${vc};`;vb.textContent=vl;
+  document.getElementById('vTxt').textContent=vt;
+}
+
+// ══ CHECKLIST ═════════════════════════════════════════════════
+// 取得目前並聯數
+function getPar(){return +((document.querySelector('#rPar .rb.active')||{dataset:{val:'1'}}).dataset.val)||1;}
+
+// 取得項目有效欄位（對有 fldsFn 者，依 par 動態產生）
+function getCFlds(c,par){return c.fldsFn?c.fldsFn(par):c.flds;}
+
+// 取得項目顯示文字（target / crit 依模組數）
+function getCTarget(c,par){return c.targetFn?c.targetFn(par):c.target;}
+function getCCrit(c,par){return c.critFn?c.critFn(par):c.crit;}
+
+function buildCK(){
+  const par=getPar();
+  // 模組數相關標籤更新
+  const parTag=`<span style="font-family:var(--mono);font-size:.6rem;color:var(--cyan);background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.2);border-radius:2px;padding:1px 6px;margin-left:6px;">${par}模組</span>`;
+
+  document.getElementById('ckBody').innerHTML=CKS.map((c,i)=>{
+    const flds=getCFlds(c,par);
+    const target=getCTarget(c,par);
+    const crit=getCCrit(c,par);
+    const isParItem=!!c.fldsFn; // 與並聯數相關
+    return `<tr id="row_${c.id}">
+      <td><span class="rn">${i+1}</span></td>
+      <td>
+        <div style="font-size:.78rem;font-weight:500;color:var(--text);margin-bottom:2px;">${c.name}${isParItem?parTag:''}</div>
+        <div style="font-size:.63rem;color:var(--text-dim);">${target}</div>
+        <div style="font-size:.63rem;color:var(--text-dim);margin-top:3px;border-left:2px solid var(--border2);padding-left:6px;">${c.method}</div>
+      </td>
+      <td>${flds.length?flds.map(f=>`<div class="ml">${f.lb}</div><input class="mi" id="${f.id}" placeholder="輸入數值" type="number" step="any" oninput="evCK('${c.id}')">`).join(''):'<div style="font-size:.63rem;color:var(--text-dim);padding:4px 0;">目視 / 儀器判讀，請直接選擇狀態。</div>'}</td>
+      <td><div class="crit" id="cr_${c.id}">${crit}</div><div id="ev_${c.id}" style="margin-top:5px;"></div></td>
+      <td>
+        <div class="ss">
+          <div class="ssb" id="ss_ok_${c.id}"  onclick="setSt('${c.id}','ok')">✓ 合格</div>
+          <div class="ssb" id="ss_wn_${c.id}"  onclick="setSt('${c.id}','warn')">△ 警戒</div>
+          <div class="ssb" id="ss_fl_${c.id}"  onclick="setSt('${c.id}','fail')">✕ 異常</div>
+          <div class="ssb" id="ss_sk_${c.id}"  onclick="setSt('${c.id}','skip')">— 略過</div>
+        </div>
+        <div id="si_${c.id}" style="margin-top:5px;font-family:var(--mono);font-size:.68rem;"></div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // 還原已輸入的數值（重建後填回）
+  CKS.forEach(c=>{
+    const flds=getCFlds(c,par);
+    const saved=cSt[c.id].vals||{};
+    flds.forEach(f=>{
+      const el=document.getElementById(f.id);
+      if(el&&saved[f.id]!==undefined)el.value=saved[f.id];
+    });
+    // 還原狀態按鈕
+    const st=cSt[c.id].status;
+    if(st)setSt(c.id,st);
+    // 重新計算顯示
+    if(flds.length)evCK(c.id);
+  });
+
+  buildSB();
+}
+
+function evCK(cid){
+  const par=getPar();
+  const c=CKS.find(x=>x.id===cid);if(!c)return;
+  const flds=getCFlds(c,par);
+  if(!flds.length)return;
+  const vals={};flds.forEach(f=>{vals[f.id]=document.getElementById(f.id)?.value||'';});
+  // 儲存輸入值（即使換模組數也保留可辨識欄位）
+  Object.assign(cSt[cid].vals,vals);
+  const r=c.eval(vals,par);cSt[cid].er=r;
+  const ev=document.getElementById('ev_'+cid),cr=document.getElementById('cr_'+cid);
+  if(r){
+    cr.className='crit '+(r.ok?'pass':r.warn?'warn':'fail');
+    ev.innerHTML=`<div style="font-family:var(--mono);font-size:.67rem;color:${r.ok?'var(--green)':r.warn?'var(--yellow)':'var(--red)'};">${r.val}</div>`;
+    if(!cSt[cid].status)setSt(cid,r.ok?'ok':r.warn?'warn':'fail');
+  }else{cr.className='crit';ev.innerHTML='';}
+  updSB();updRpt();
+}
+
+function setSt(cid,st){
+  cSt[cid].status=st;
+  const map={ok:'s-ok',warn:'s-warn',fail:'s-fail',skip:'s-skip'};
+  ['ok','warn','fail','skip'].forEach(s=>{
+    const b=document.getElementById('ss_'+(s==='warn'?'wn':s==='fail'?'fl':s==='skip'?'sk':s)+'_'+cid);
+    if(b)b.className='ssb'+(s===st?' '+map[s]:'');
+  });
+  const lbs={ok:['var(--green)','● PASS'],warn:['var(--yellow)','▲ WARN'],fail:['var(--red)','✕ FAIL'],skip:['var(--text-dim)','— SKIP']};
+  const si=document.getElementById('si_'+cid);
+  if(si&&lbs[st])si.innerHTML=`<span style="color:${lbs[st][0]};">${lbs[st][1]}</span>`;
+  updSB();updRpt();
+}
+
+// ══ STEP BAR ══════════════════════════════════════════════════
+function buildSB(){
+  const lbs=['熱阻j-c','熱阻c-h','導熱介','散熱器','接觸阻','電流','Vce均','開關速','散熱均','封裝層'];
+  document.getElementById('stepBar').innerHTML=CKS.map((c,i)=>`
+    ${i>0?`<div class="step-ln" id="sl${i}"></div>`:''}
+    <div class="step-i"><div class="step-c" id="sc${i+1}">${i+1}</div><div class="step-lbl">${lbs[i]}</div></div>`).join('');
+}
+
+function updSB(){
+  CKS.forEach((c,i)=>{
+    const sc=document.getElementById('sc'+(i+1));
+    const sl=document.getElementById('sl'+i);
+    if(!sc)return;
+    const st=cSt[c.id].status;
+    sc.style.cssText='';sc.classList.remove('done');
+    if(st==='ok'){sc.innerHTML='✓';sc.style.cssText='background:var(--green);border-color:var(--green);color:var(--bg);box-shadow:0 0 8px rgba(0,230,118,.4);';}
+    else if(st==='fail'){sc.innerHTML='✕';sc.style.cssText='background:var(--red);border-color:var(--red);color:#fff;box-shadow:0 0 8px rgba(255,23,68,.4);';}
+    else if(st==='warn'){sc.innerHTML='△';sc.style.cssText='background:var(--yellow);border-color:var(--yellow);color:var(--bg);';}
+    else if(st==='skip'){sc.innerHTML='—';sc.style.cssText='border-color:var(--text-dim);color:var(--text-dim);';}
+    else{sc.innerHTML=i+1;sc.style.cssText='border-color:var(--cyan);color:var(--cyan);';}
+    if(sl)sl.classList.toggle('done',!!st&&st!=='');
+  });
+}
+
+// ══ REPORT ════════════════════════════════════════════════════
+function updRpt(){
+  const now=new Date();
+  document.getElementById('rptTime').textContent=now.toLocaleString('zh-TW');
+  document.getElementById('ts_d').textContent=now.toLocaleDateString('zh-TW');
+  const ab=CKS.filter(c=>cSt[c.id].status==='fail');
+  const wn=CKS.filter(c=>cSt[c.id].status==='warn');
+  const ok=CKS.filter(c=>cSt[c.id].status==='ok');
+  const sk=CKS.filter(c=>cSt[c.id].status==='skip');
+  document.getElementById('rptAb').textContent=ab.length;
+  document.getElementById('rptWn').textContent=wn.length;
+
+  const allAb=[...ab,...wn];
+  document.getElementById('rptBody').innerHTML=allAb.length===0?
+    `<tr><td colspan="5" style="text-align:center;padding:18px;color:var(--text-dim);font-family:var(--mono);font-size:.7rem;">尚無異常或警戒項目</td></tr>`:
+    allAb.map((c,i)=>{
+      const st=cSt[c.id];
+      const tag=st.status==='fail'?'<span class="tag tf">異常</span>':'<span class="tag tw">警戒</span>';
+      const val=st.er?st.er.val:'（目視判定）';
+      return `<tr style="animation:fu .3s ease ${i*.05}s both;">
+        <td><span class="rn">${CKS.indexOf(c)+1}</span></td>
+        <td><div style="font-size:.76rem;font-weight:500;">${c.name}</div><div style="font-size:.62rem;color:var(--text-dim);">${c.target}</div></td>
+        <td style="font-family:var(--mono);font-size:.7rem;color:var(--text-mid);">${val}</td>
+        <td style="font-size:.66rem;color:var(--text-dim);">${c.crit}</td>
+        <td>${tag}</td></tr>`;}).join('');
+
+  document.getElementById('rptStats').innerHTML=`
+    <div class="g4" style="margin-bottom:12px;">
+      <div class="sc"><div class="v" style="color:var(--green);">${ok.length}</div><div class="lb">合格</div></div>
+      <div class="sc"><div class="v" style="color:var(--yellow);">${wn.length}</div><div class="lb">警戒</div></div>
+      <div class="sc"><div class="v" style="color:var(--red);">${ab.length}</div><div class="lb">異常</div></div>
+      <div class="sc"><div class="v" style="color:var(--text-dim);">${sk.length}</div><div class="lb">略過</div></div>
+    </div>
+    <div class="rb-w"><div class="rb-t" style="height:5px;"><div class="rb-f" style="width:${CKS.filter(c=>!!cSt[c.id].status).length/CKS.length*100}%;background:var(--cyan);"></div></div><div class="rb-l"><span>檢測進度</span><span style="color:var(--cyan);">${CKS.filter(c=>!!cSt[c.id].status).length}/${CKS.length}</span></div></div>`;
+
+  const pr=[];
+  ab.forEach(c=>pr.push(`<strong style="color:var(--red);">[立即處理]</strong> ${c.name}：${c.crit}`));
+  wn.forEach(c=>pr.push(`<strong style="color:var(--yellow);">[近期追蹤]</strong> ${c.name}：${c.crit}`));
+  if(!pr.length)pr.push('目前無需優先處理項目。');
+  document.getElementById('rptPrio').innerHTML=pr.map(p=>`<li>${p}</li>`).join('');
+
+  const cx=[];
+  if(cSt['c1'].status==='fail'||cSt['c9'].status==='fail')
+    cx.push({i:'🔥',t:'散熱路徑異常',d:'結–殼熱阻或散熱均勻性異常，可能同時影響功耗上限與封裝壽命，需交叉確認散熱器接觸面與矽脂狀態。'});
+  const _par=getPar();
+  if(_par>1&&(cSt['c6'].status==='fail'||cSt['c7'].status==='fail'||cSt['c8'].status==='fail'))
+    cx.push({i:'⚡',t:`${_par}並聯均流失衡`,d:`電流分佈、Vce(on) 一致性或開關速度出現異常（${_par}並聯配置），三者互相影響。Vce(on) 差異大的模組將承受更多電流，加速局部溫升。`});
+  if(cSt['c1'].status==='fail'&&cSt['c10'].status==='fail')
+    cx.push({i:'💥',t:'封裝熱阻複合惡化',d:'結–殼熱阻偏高且封裝焊層空洞同時存在，局部熱點溫升估算可能超額定值 30°C 以上，屬高危複合失效模式。'});
+  document.getElementById('rptCross').innerHTML=cx.length?cx.map(x=>`
+    <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border);">
+      <div style="font-size:1.3rem;">${x.i}</div>
+      <div><div style="font-size:.78rem;font-weight:500;color:var(--orange);margin-bottom:3px;">${x.t}</div><div style="font-size:.72rem;color:var(--text-mid);line-height:1.6;">${x.d}</div></div>
+    </div>`).join(''):'<div style="font-size:.75rem;color:var(--text-dim);padding:10px 0;">目前無交叉異常，或檢測項目尚未完成。</div>';
+}
+
+
+// ══ DEMO FILL ══════════════════════════════════════════════════
+function fillDemo(){
+  // Set sliders
+  // 示範：1200V IGBT，300A，4kHz
+  document.getElementById('sIc').value=300;  sv('sIc','dIc',v=>v+' A');
+  document.getElementById('sVce').value=2.0; sv('sVce','dVce',v=>parseFloat(v).toFixed(2)+' V');
+  document.getElementById('sEsw').value=5;   sv('sEsw','dEsw',v=>{const n=+v;return n>=1000?(n/1000).toFixed(2)+' J':n.toFixed(1)+' mJ';});
+  document.getElementById('sFsw').value=4000;sv('sFsw','dFsw',v=>{const n=+v;return n>=1000?(n/1000).toFixed(1)+' kHz':n+' Hz';});
+  document.getElementById('sVcc').value=700; sv('sVcc','dVcc',v=>v+' V');
+  document.getElementById('sLd').value=85;   sv('sLd','dLd',v=>v+'%');
+  document.getElementById('sTj').value=130; sv('sTj','dTj',v=>v+'°C');
+  document.getElementById('sTa').value=35; sv('sTa','dTa',v=>v+'°C');
+  document.getElementById('sRt').value=0.8; sv('sRt','dRt',v=>parseFloat(v).toFixed(2)+' °C/W');
+  // Set radio: 125°C Tjmax, 2 parallel, original heatsink
+  document.querySelectorAll('#rTj .rb').forEach(b=>b.classList.remove('active'));
+  document.querySelector('#rTj .rb[data-val="125"]').classList.add('active');
+  document.querySelectorAll('#rPar .rb').forEach(b=>b.classList.remove('active'));
+  document.querySelector('#rPar .rb[data-val="2"]').classList.add('active');
+  buildCK(); // 依示範的並聯數2重建檢測表
+  document.querySelectorAll('#rHs .rb').forEach(b=>b.classList.remove('active'));
+  document.querySelector('#rHs .rb[data-val="old"]').classList.add('active');
+  // Set defects
+  ['grease','imbal'].forEach(k=>{if(!dfSt[k]){tgDf(k);}});
+  // Run analysis
+  runA();
+  // Fill checklist demo values（2並聯示範）
+  const par2demo={
+    c1_tj:'130',c1_tc:'108',c1_p:'561',c1_rd:'0.015',
+    c2_tc:'108',c2_th:'98',
+    c3_cov:'88',c3_unif:'3',
+    c4_fl:'180',c4_ds:'200',c4_dt:'8',
+    // c5: 2並聯，2個壓降
+    c5_v1:'12.0',c5_v2:'13.8',
+    // c6: 2並聯，2個電流
+    c6_i1:'290',c6_i2:'240',
+    // c7: 2並聯，2個 Vce(on)
+    c7_v1:'1.95',c7_v2:'2.12',
+    // c8: 2並聯，2個開通時間
+    c8_t1:'182',c8_t2:'238',
+    // c9: 2並聯，2個表面溫度
+    c9_t1:'105',c9_t2:'118',
+    c10_vd:'7.5'
+  };
+  // 儲存到 state 再讓 buildCK 填回
+  Object.keys(par2demo).forEach(fid=>{
+    const cid='c'+fid.split('_')[0].replace('c','');
+    // 找到對應 c.id
+    const ck=CKS.find(c=>c.id===fid.split('_')[0]);
+    if(ck)cSt[ck.id].vals[fid]=par2demo[fid];
+  });
+  // 直接填入 DOM
+  Object.keys(par2demo).forEach(fid=>{const el=document.getElementById(fid);if(el)el.value=par2demo[fid];});
+  CKS.forEach(c=>evCK(c.id));
+}
+
+// ══ TAB SWITCH ════════════════════════════════════════════════
+function swTab(id){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const idx=['ti','tc','tr'].indexOf(id);
+  document.querySelectorAll('.tab-btn')[idx].classList.add('active');
+  if(id==='tr')updRpt();
+}
+
+// ══ INIT ══════════════════════════════════════════════════════
+window.onload=function(){
+  // ── Service Worker 註冊 ──────────────────────────────────────
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  }
+  // ── PWA 安裝提示 ─────────────────────────────────────────────
+  let deferredPrompt=null;
+  const banner=document.getElementById('pwa-banner');
+  const instBtn=document.getElementById('pwa-install-btn');
+  const dismiss=document.getElementById('pwa-dismiss');
+  window.addEventListener('beforeinstallprompt',e=>{
+    e.preventDefault();deferredPrompt=e;
+    banner.classList.remove('hidden');banner.style.display='flex';
+  });
+  instBtn&&instBtn.addEventListener('click',async()=>{
+    if(!deferredPrompt)return;
+    deferredPrompt.prompt();
+    const{outcome}=await deferredPrompt.userChoice;
+    deferredPrompt=null;
+    banner.classList.add('hidden');
+  });
+  dismiss&&dismiss.addEventListener('click',()=>banner.classList.add('hidden'));
+  window.addEventListener('appinstalled',()=>banner.classList.add('hidden'));
+  // ────────────────────────────────────────────────────────────
+  sv('sIc','dIc',v=>v+' A');
+  sv('sVce','dVce',v=>parseFloat(v).toFixed(2)+' V');
+  sv('sEsw','dEsw',v=>{const n=+v;return n>=1000?(n/1000).toFixed(2)+' J':n.toFixed(1)+' mJ';});
+  sv('sFsw','dFsw',v=>{const n=+v;return n>=1000?(n/1000).toFixed(1)+' kHz':n+' Hz';});
+  sv('sVcc','dVcc',v=>v+' V');
+  sv('sLd','dLd',v=>v+'%');
+  sv('sTj','dTj',v=>v+'°C');sv('sTa','dTa',v=>v+'°C');
+  sv('sRt','dRt',v=>parseFloat(v).toFixed(3)+' °C/W');
+  buildDf();buildCK();
+  document.getElementById('ts_d').textContent=new Date().toLocaleDateString('zh-TW');
+};
+</script>
+</body>
+</html>
